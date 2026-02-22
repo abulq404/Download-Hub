@@ -14,18 +14,24 @@ def get_info():
     if not video_url:
         return jsonify({"error": "লিংক দিতে হবে!"}), 400
 
-    ydl_opts = {}
+    # 'best' ফরম্যাট সেট করলে এটি নিজে থেকেই সেরা কোয়ালিটির লিংক আনবে
+    ydl_opts = {
+        'format': 'best'
+    }
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # ভিডিওর তথ্য বের করা (ডাউনলোড না করে)
             info = ydl.extract_info(video_url, download=False)
             
-            # আমরা শুধু টাইটেল এবং ভিডিওর ডাউনলোড ইউআরএল নিচ্ছি
+            # আসল ডাউনলোড লিংক খুঁজে বের করার লজিক
+            video_link = info.get('url')
+            if not video_link and 'formats' in info:
+                video_link = info['formats'][-1].get('url')
+            
             video_data = {
                 "title": info.get('title', 'No Title'),
                 "thumbnail": info.get('thumbnail'),
-                "url": info.get('url') # সরাসরি ডাউনলোড লিংক
+                "url": video_link
             }
             return jsonify(video_data)
     except Exception as e:
