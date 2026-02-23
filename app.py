@@ -14,35 +14,47 @@ def get_info():
     if not video_url:
         return jsonify({"error": "লিংক দিতে হবে!"}), 400
 
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-    }
+    ydl_opts = {'quiet': True, 'no_warnings': True}
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
+            formats = info.get('formats', [])
             
-            # ফেসবুকের জন্য উন্নত লিংক এক্সট্রাকশন
-            video_link = info.get('url')
-            if not video_link and info.get('formats'):
-                for f in reversed(info.get('formats')):
-                    if f.get('vcodec') != 'none' and f.get('url'):
-                        video_link = f.get('url')
-                        break
-            
-            if not video_link:
-                raise Exception("ডাউনলোড লিংক পাওয়া যায়নি।")
+            download_options = []
+            seen_resolutions = set()
+
+            # ফরম্যাট লিস্ট থেকে MP4 এবং নির্দিষ্ট রেজোলিউশন ফিল্টার করা
+            for f in reversed(formats):
+                res = f.get('height')
+                ext = f.get('ext')
+                url = f.get('url')
+                
+                # শুধুমাত্র ভিডিওসহ (vcodec != none) এবং MP4 ফরম্যাটগুলো নেবে
+                if url and res and ext == 'mp4' and f.get('vcodec') != 'none':
+                    res_label = f"{res}p"
+                    if res_label not in seen_resolutions:
+                        download_options.append({
+                            "quality": res_label,
+                            "url": url,
+                            "ext": ext
+                        })
+                        seen_resolutions.add(res_label)
+
+            # যদি কোনো রেজোলিউশন না পায়, তবে ডিফল্ট বেস্ট লিংকটি দেবে
+            if not download_options:
+                best_url = info.get('url') or (formats[-1].get('url') if formats else None)
+                if best_url:
+                    download_options.append({"quality": "Default (Best)", "url": best_url, "ext": "mp4"})
 
             return jsonify({
                 "title": info.get('title', 'Unknown Title'),
                 "thumbnail": info.get('thumbnail', ''),
-                "url": video_link
+                "options": download_options
             })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # Render-এর জন্য ডাইনামিক পোর্ট সেটআপ
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
