@@ -22,30 +22,48 @@ def get_info():
             formats = info.get('formats', [])
             
             download_options = []
-            seen_resolutions = set()
+            seen_video_res = set()
+            audio_added = False
 
-            # ফরম্যাট লিস্ট থেকে MP4 এবং নির্দিষ্ট রেজোলিউশন ফিল্টার করা
+            # ফরম্যাট লিস্ট থেকে ভিডিও এবং অডিও আলাদা করা
             for f in reversed(formats):
-                res = f.get('height')
-                ext = f.get('ext')
                 url = f.get('url')
-                
-                # শুধুমাত্র ভিডিওসহ (vcodec != none) এবং MP4 ফরম্যাটগুলো নেবে
-                if url and res and ext == 'mp4' and f.get('vcodec') != 'none':
-                    res_label = f"{res}p"
-                    if res_label not in seen_resolutions:
+                ext = f.get('ext')
+                vcodec = f.get('vcodec')
+                acodec = f.get('acodec')
+                height = f.get('height')
+
+                if not url:
+                    continue
+
+                # ১. ভিডিও ফরম্যাট (MP4 এবং ভিডিও কোডেক আছে এমন)
+                if ext == 'mp4' and vcodec != 'none' and vcodec is not None:
+                    res_label = f"{height}p" if height else "Video (MP4)"
+                    if res_label not in seen_video_res:
                         download_options.append({
+                            "type": "video",
                             "quality": res_label,
                             "url": url,
-                            "ext": ext
+                            "ext": "mp4"
                         })
-                        seen_resolutions.add(res_label)
+                        seen_video_res.add(res_label)
+                
+                # ২. অডিও/MP3 ফরম্যাট (শুধুমাত্র অডিও কোডেক আছে এমন)
+                if acodec != 'none' and vcodec == 'none':
+                    if not audio_added: # শুধুমাত্র সেরা কোয়ালিটির একটি অডিও অপশন দেখাবে
+                        download_options.append({
+                            "type": "audio",
+                            "quality": "Audio (MP3)",
+                            "url": url,
+                            "ext": "mp3"
+                        })
+                        audio_added = True # চাইলে এটি তুলে দিলে আরও অডিও অপশন দেখাবে
 
-            # যদি কোনো রেজোলিউশন না পায়, তবে ডিফল্ট বেস্ট লিংকটি দেবে
+            # যদি কোনোভাবেই আলাদা অপশন না পায়, তবে ডিফল্ট লিংক দেবে
             if not download_options:
-                best_url = info.get('url') or (formats[-1].get('url') if formats else None)
+                best_url = info.get('url')
                 if best_url:
-                    download_options.append({"quality": "Default (Best)", "url": best_url, "ext": "mp4"})
+                    download_options.append({"type": "video", "quality": "Best Quality", "url": best_url})
 
             return jsonify({
                 "title": info.get('title', 'Unknown Title'),
